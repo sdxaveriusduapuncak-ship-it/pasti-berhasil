@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Survei Kepuasan & Harapan Orang Tua/Wali Murid Baru SD Xaverius 2 Jambi</title>
+  
+  <!-- CSS Pendukung (Tailwind CSS) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Pustaka React & ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  
+  <!-- Kompiler Babel (Untuk menjalankan React langsung di browser tanpa build) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.4s ease-out forwards;
+    }
+    @keyframes scaleUp {
+      from { transform: scale(0.96); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .animate-scale-up {
+      animation: scaleUp 0.3s ease-out forwards;
+    }
+    @media print {
+      .print\:hidden { display: none !important; }
+      .print\:block { display: block !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50">
+
+  <div id="root"></div>
+
+  <!-- KODE UTAMA APLIKASI SURVEI & DASHBOARD -->
+  <script type="text/babel">
+    const { useState, useMemo, useEffect } = React;
+
+    // DATA AWAL KOSONG UNTUK PESERTA SPMB (CLEAN SLATE)
+    const INITIAL_ELIGIBLE_PARENTS = [];
+
+    // KONFIGURASI PERTANYAAN
+    const INITIAL_QUESTIONS = [
+      {
+        id: 1,
+        key: 'q1',
+        title: 'Dari mana Bapak/Ibu pertama kali mendapatkan informasi mengenai SPMB SD Xaverius 2 Jambi?',
+        type: 'radio',
+        options: [
+          'Media sosial resmi sekolah',
+          'Spanduk/Brosur/Baliho',
+          'Rekomendasi keluarga, teman, atau alumni',
+          'TK asal anak'
+        ]
+      },
+      {
+        id: 2,
+        key: 'q2',
+        title: 'Bagaimana penilaian Bapak/Ibu mengenai kejelasan informasi, syarat-syarat, dan alur pendaftaran?',
+        type: 'radio',
+        options: [
+          'Sangat Jelas dan Mudah Dipahami',
+          'Cukup Jelas',
+          'Kurang Jelas'
+        ]
+      },
+      {
+        id: 3,
+        key: 'q3',
+        title: 'Bagaimana Bapak/Ibu menilai sikap dan keramahan panitia?',
+        type: 'radio',
+        options: [
+          'Sangat ramah dan membantu',
+          'Cukup ramah',
+          'Kurang ramah'
+        ]
+      },
+      {
+        id: 4,
+        key: 'q4',
+        title: 'Bagaimana kesan terhadap kebersihan, keamanan, dan kerapian sekolah?',
+        type: 'radio',
+        options: [
+          'Sangat Baik',
+          'Cukup Baik',
+          'Kurang Baik'
+        ]
+      },
+      {
+        id: 5,
+        key: 'q5',
+        title: 'Bagaimana penilaian mengenai kemudahan administrasi dan keuangan?',
+        type: 'radio',
+        options: [
+          'Sangat praktis dan transparan',
+          'Cukup baik',
+          'Rumit dan kurang transparan'
+        ]
+      },
+      {
+        id: 6,
+        key: 'q6',
+        title: 'Faktor utama memilih SD Xaverius 2 Jambi?',
+        type: 'radio',
+        options: [
+          'Kualitas akademik',
+          'Pembentukan karakter dan nilai agama',
+          'Lokasi strategis',
+          'Fasilitas dan ekstrakurikuler'
+        ]
+      },
+      {
+        id: 7,
+        key: 'q7',
+        title: 'Aspek perkembangan yang paling diharapkan pada anak? (Pilih maksimal 2)',
+        type: 'checkbox',
+        maxOptions: 2,
+        options: [
+          'Kemampuan akademik',
+          'Pembentukan karakter',
+          'Kedewasaan iman',
+          'Kemampuan sosial'
+        ]
+      },
+      {
+        id: 8,
+        key: 'q8',
+        title: 'Media komunikasi yang paling diharapkan antara sekolah dengan orang tua?',
+        type: 'radio',
+        options: [
+          'Grup WhatsApp kelas',
+          'Aplikasi sekolah/LMS',
+          'Surat edaran',
+          'Pertemuan tatap muka'
+        ]
+      },
+      {
+        id: 9,
+        key: 'q9',
+        title: 'Apakah Bapak/Ibu bersedia merekomendasikan SD Xaverius 2 Jambi kepada kerabat atau rekan?',
+        type: 'radio',
+        options: [
+          'Ya',
+          'Mungkin',
+          'Tidak'
+        ]
+      },
+      {
+        id: 10,
+        key: 'q10',
+        title: 'Saran dan masukan konstruktif untuk kemajuan SD Xaverius 2 Jambi:',
+        type: 'textarea',
+        placeholder: 'Tuliskan aspirasi, harapan, pujian, atau kritik membangun Anda di sini...'
+      }
+    ];
+
+    const INITIAL_RESPONSES = [];
+    const DEFAULT_ADMIN_PIN = "2026";
+
+    function App() {
+      const [activeTab, setActiveTab] = useState('survey');
+
+      // Sinkronisasi data dinamis dengan penyimpanan Lokal Browser (LocalStorage)
+      const [responses, setResponses] = useState(() => {
+        const saved = localStorage.getItem('xaverius_survey_responses');
+        return saved ? JSON.parse(saved) : INITIAL_RESPONSES;
+      });
+
+      const [questions, setQuestions] = useState(() => {
+        const saved = localStorage.getItem('xaverius_survey_questions');
+        return saved ? JSON.parse(saved) : INITIAL_QUESTIONS;
+      });
+
+      const [eligibleParents, setEligibleParents] = useState(() => {
+        const saved = localStorage.getItem('xaverius_survey_parents');
+        return saved ? JSON.parse(saved) : INITIAL_ELIGIBLE_PARENTS;
+      });
+
+      const [adminPin, setAdminPin] = useState(() => {
+        const saved = localStorage.getItem('xaverius_survey_admin_pin');
+        return saved ? saved : DEFAULT_ADMIN_PIN;
+      });
+
+      useEffect(() => {
+        localStorage.setItem('xaverius_survey_responses', JSON.stringify(responses));
+      }, [responses]);
+
+      useEffect(() => {
+        localStorage.setItem('xaverius_survey_questions', JSON.stringify(questions));
+      }, [questions]);
+
+      useEffect(() => {
+        localStorage.setItem('xaverius_survey_parents', JSON.stringify(eligibleParents));
+      }, [eligibleParents]);
+
+      // State UI & Wizard
+      const [logoHasError, setLogoHasError] = useState(false);
+      const [currentParent, setCurrentParent] = useState(null); 
+      const [loginRegNo, setLoginRegNo] = useState('');
+      const [loginError, setLoginError] = useState('');
+      const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
+      const [passcode, setPasscode] = useState('');
+      const [passcodeError, setPasscodeError] = useState('');
+      const [adminSubTab, setAdminSubTab] = useState('statistics'); 
+      const [isOnScreenPrintPreview, setIsOnScreenPrintPreview] = useState(false);
+      const [currentStep, setCurrentStep] = useState(1);
+      
+      const [formData, setFormData] = useState({
+        q1: '', q2: '', q3: '', q4: '', q5: '', q6: '', q7: [], q8: '', q9: '', q10: ''
+      });
+      const [surveySubmitted, setSurveySubmitted] = useState(false);
+      const [validationError, setValidationError] = useState('');
+
+      // State Admin Kelola Pertanyaan
+      const [editingQuestionId, setEditingQuestionId] = useState(null);
+      const [editQuestionTitle, setEditQuestionTitle] = useState('');
+      const [editQuestionOptions, setEditQuestionOptions] = useState([]);
+      const [newOptionText, setNewOptionText] = useState('');
+      const [customAlert, setCustomAlert] = useState(null); 
+      const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+
+      // State Tambah Pertanyaan
+      const [showAddQuestionForm, setShowAddQuestionForm] = useState(false);
+      const [newQuestionTitle, setNewQuestionTitle] = useState('');
+      const [newQuestionType, setNewQuestionType] = useState('radio'); 
+      const [newQuestionOptions, setNewQuestionOptions] = useState(['Opsi 1', 'Opsi 2']);
+
+      // State Tambah Calon Siswa & PIN
+      const [newRegNo, setNewRegNo] = useState('');
+      const [newKelas, setNewKelas] = useState('');
+      const [newPinInput, setNewPinInput] = useState('');
+      const [importTextArea, setImportTextArea] = useState('');
+
+      const totalSteps = questions.length;
+
+      // Kalkulasi Statistik Real-time
+      const stats = useMemo(() => {
+        const total = responses.length;
+        const initialStats = {};
+
+        questions.forEach(q => {
+          initialStats[q.key] = {};
+          if (q.type !== 'textarea' && q.options) {
+            q.options.forEach(opt => {
+              initialStats[q.key][opt] = 0;
+            });
+          }
+        });
+
+        responses.forEach(res => {
+          questions.forEach(q => {
+            if (q.type === 'radio') {
+              const val = res[q.key];
+              if (val) {
+                initialStats[q.key][val] = (initialStats[q.key][val] || 0) + 1;
+              }
+            } else if (q.type === 'checkbox') {
+              const arr = res[q.key];
+              if (Array.isArray(arr)) {
+                arr.forEach(val => {
+                  initialStats[q.key][val] = (initialStats[q.key][val] || 0) + 1;
+                });
+              }
+            }
+          });
+        });
+
+        return { total, data: initialStats };
+      }, [responses, questions]);
+
+      const handleParentLogin = (e) => {
+        if (e) e.preventDefault();
+        setLoginError('');
+        const formattedRegNo = loginRegNo.trim().toUpperCase();
+
+        const found = eligibleParents.find(
+          p => p.regNo.toUpperCase() === formattedRegNo
+        );
+
+        if (!found) {
+          setLoginError('Nomor Verifikasi tidak ditemukan dalam sistem SPMB 2026/2027.');
+          return;
+        }
+
+        if (found.status === 'Sudah Mengisi') {
+          setLoginError('Wali murid dengan Nomor Verifikasi ini sudah mengisi survei sebelumnya. Terima kasih.');
+          return;
+        }
+
+        setCurrentParent(found);
+        setFormData(prev => ({
+          ...prev,
+          kelas: found.kelas,
+          regNo: found.regNo
+        }));
+      };
+
+      const handleParentLogout = () => {
+        setCurrentParent(null);
+        setLoginRegNo('');
+        resetSurvey();
+      };
+
+      const handleRadioChange = (key, value) => {
+        setValidationError('');
+        setFormData(prev => ({ ...prev, [key]: value }));
+      };
+
+      const handleCheckboxChange = (key, option, maxAllowed) => {
+        setValidationError('');
+        setFormData(prev => {
+          const currentSelected = prev[key] || [];
+          if (currentSelected.includes(option)) {
+            return {
+              ...prev,
+              [key]: currentSelected.filter(item => item !== option)
+            };
+          } else {
+            if (currentSelected.length >= maxAllowed) {
+              setValidationError(`Batas maksimal pengisian adalah ${maxAllowed} aspek perkembangan.`);
+              return prev;
+            }
+            return {
+              ...prev,
+              [key]: [...currentSelected, option]
+            };
+          }
+        });
+      };
+
+      const handleTextChange = (key, value) => {
+        setFormData(prev => ({ ...prev, [key]: value }));
+      };
+
+      const handleNext = () => {
+        const currentQuestion = questions[currentStep - 1];
+        const answer = formData[currentQuestion.key];
+
+        if (currentQuestion.type === 'radio' && !answer) {
+          setValidationError('Silakan pilih salah satu jawaban terlebih dahulu.');
+          return;
+        }
+        if (currentQuestion.type === 'checkbox' && (!answer || answer.length === 0)) {
+          setValidationError('Silakan pilih minimal 1 jawaban (maksimal 2).');
+          return;
+        }
+
+        setValidationError('');
+        if (currentStep < totalSteps) {
+          setCurrentStep(prev => prev + 1);
+        }
+      };
+
+      const handlePrev = () => {
+        setValidationError('');
+        if (currentStep > 1) {
+          setCurrentStep(prev => prev - 1);
+        }
+      };
+
+      const handleSubmitSurvey = (e) => {
+        if (e) e.preventDefault();
+        const newResponse = { ...formData, kelas: currentParent.kelas, regNo: currentParent.regNo };
+        setResponses(prev => [newResponse, ...prev]);
+
+        setEligibleParents(prev => prev.map(p => {
+          if (p.regNo === currentParent.regNo) {
+            return { ...p, status: 'Sudah Mengisi' };
+          }
+          return p;
+        }));
+
+        setSurveySubmitted(true);
+      };
+
+      const resetSurvey = () => {
+        setFormData({
+          q1: '', q2: '', q3: '', q4: '', q5: '', q6: '', q7: [], q8: '', q9: '', q10: ''
+        });
+        setCurrentStep(1);
+        setSurveySubmitted(false);
+        setValidationError('');
+      };
+
+      const handleAdminAccess = (e) => {
+        if (e) e.preventDefault();
+        if (passcode === adminPin) {
+          setIsAdminUnlocked(true);
+          setPasscodeError('');
+        } else {
+          setPasscodeError('PIN salah! Silakan periksa kembali PIN Anda.');
+        }
+      };
+
+      const handleUpdatePin = (e) => {
+        if (e) e.preventDefault();
+        const cleanPin = newPinInput.trim();
+        if (cleanPin.length < 4) {
+          showCustomAlert('PIN keamanan baru minimal harus terdiri dari 4 karakter.');
+          return;
+        }
+        setAdminPin(cleanPin);
+        localStorage.setItem('xaverius_survey_admin_pin', cleanPin);
+        setNewPinInput('');
+        showCustomAlert(`PIN keamanan berhasil diperbarui menjadi: ${cleanPin}`);
+      };
+
+      const handleLogoutAdmin = () => {
+        setIsAdminUnlocked(false);
+        setPasscode('');
+        setActiveTab('survey');
+      };
+
+      const startEditingQuestion = (q) => {
+        setEditingQuestionId(q.id);
+        setEditQuestionTitle(q.title);
+        setEditQuestionOptions(q.options ? [...q.options] : []);
+        setNewOptionText('');
+      };
+
+      const saveEditedQuestion = () => {
+        if (!editQuestionTitle.trim()) {
+          showCustomAlert('Judul pertanyaan tidak boleh kosong.');
+          return;
+        }
+        
+        setQuestions(prev => prev.map(q => {
+          if (q.id === editingQuestionId) {
+            return {
+              ...q,
+              title: editQuestionTitle,
+              options: q.type !== 'textarea' ? editQuestionOptions : undefined
+            };
+          }
+          return q;
+        }));
+
+        setEditingQuestionId(null);
+        showCustomAlert('Pertanyaan berhasil diperbarui!');
+      };
+
+      const addOptionToEdit = () => {
+        if (!newOptionText.trim()) return;
+        if (editQuestionOptions.includes(newOptionText.trim())) {
+          showCustomAlert('Opsi tersebut sudah terdaftar.');
+          return;
+        }
+        setEditQuestionOptions(prev => [...prev, newOptionText.trim()]);
+        setNewOptionText('');
+      };
+
+      const deleteOptionFromEdit = (indexToDelete) => {
+        setEditQuestionOptions(prev => prev.filter((_, idx) => idx !== indexToDelete));
+      };
+
+      const handleAddNewQuestion = () => {
+        if (!newQuestionTitle.trim()) {
+          showCustomAlert('Judul pertanyaan baru wajib diisi.');
+          return;
+        }
+
+        const nextId = questions.length + 1;
+        const nextKey = `q${nextId}`;
+
+        const newQ = {
+          id: nextId,
+          key: nextKey,
+          title: newQuestionTitle,
+          type: newQuestionType,
+          options: newQuestionType !== 'textarea' ? newQuestionOptions : undefined,
+          maxOptions: newQuestionType === 'checkbox' ? 2 : undefined
+        };
+
+        setQuestions(prev => [...prev, newQ]);
+        setFormData(prev => ({ ...prev, [nextKey]: newQuestionType === 'checkbox' ? [] : '' }));
+
+        setNewQuestionTitle('');
+        setNewQuestionType('radio');
+        setNewQuestionOptions(['Opsi 1', 'Opsi 2']);
+        setShowAddQuestionForm(false);
+        showCustomAlert('Pertanyaan baru berhasil ditambahkan!');
+      };
+
+      const handleAddEligibleParent = (e) => {
+        if (e) e.preventDefault();
+        if (!newRegNo.trim() || !newKelas.trim()) {
+          showCustomAlert('Harap isi Nomor Registrasi dan Kelas.');
+          return;
+        }
+
+        const formattedReg = newRegNo.trim().toUpperCase();
+        if (eligibleParents.some(p => p.regNo.toUpperCase() === formattedReg)) {
+          showCustomAlert('Nomor Registrasi SPMB sudah terdaftar.');
+          return;
+        }
+
+        setEligibleParents(prev => [
+          ...prev,
+          { regNo: formattedReg, kelas: newKelas.trim(), status: 'Belum Mengisi' }
+        ]);
+
+        setNewRegNo('');
+        setNewKelas('');
+        showCustomAlert('Data calon siswa berhasil ditambahkan.');
+      };
+
+      const downloadExcelTemplate = () => {
+        const headers = ["Nomor Registrasi", "Kelas"];
+        const rows = [
+          ["SPMB-2026-001", "Kelas 1A"],
+          ["SPMB-2026-002", "Kelas 1B"],
+          ["SPMB-2026-003", "Kelas 1C"]
+        ];
+
+        const csvContent = "data:text/csv;charset=utf-8,\uFEFF" 
+          + [headers.join(','), ...rows.map(e => e.join(","))].join("\n");
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "Template_Data_Siswa_SPMB.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      };
+
+      const handleImportData = (rawText) => {
+        if (!rawText || !rawText.trim()) {
+          showCustomAlert('Teks impor kosong. Silakan masukkan data terlebih dahulu.');
+          return;
+        }
+
+        const lines = rawText.split(/\r?\n/);
+        const newImports = [];
+        let successCount = 0;
+        let duplicateCount = 0;
+        let invalidCount = 0;
+
+        lines.forEach((line) => {
+          const cleanLine = line.trim();
+          if (!cleanLine) return;
+
+          const parts = cleanLine.includes('\t') ? cleanLine.split('\t') : cleanLine.split(',');
+          
+          if (parts.length >= 2) {
+            const regNo = parts[0].trim().toUpperCase();
+            const kelas = parts[1].trim();
+
+            if (regNo && kelas) {
+              const isDuplicateInImport = newImports.some(item => item.regNo === regNo);
+              const isDuplicateInDb = eligibleParents.some(item => item.regNo === regNo);
+
+              if (!isDuplicateInImport && !isDuplicateInDb) {
+                newImports.push({
+                  regNo,
+                  kelas,
+                  status: 'Belum Mengisi'
+                });
+                successCount++;
+              } else {
+                duplicateCount++;
+              }
+            } else {
+              invalidCount++;
+            }
+          } else {
+            invalidCount++;
+          }
+        });
+
+        if (newImports.length > 0) {
+          setEligibleParents(prev => [...prev, ...newImports]);
+          showCustomAlert(`Berhasil mengimpor ${successCount} data baru! ${duplicateCount > 0 ? `(Terdeteksi ${duplicateCount} data duplikat diabaikan)` : ''}`);
+          setImportTextArea('');
+        } else {
+          showCustomAlert('Gagal memproses impor. Harap pastikan format baris sesuai petunjuk (Kolom 1: No Reg, Kolom 2: Kelas).');
+        }
+      };
+
+      const handleCsvFileUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          handleImportData(event.target.result);
+        };
+        reader.readAsText(file);
+        e.target.value = ''; 
+      };
+
+      const showCustomAlert = (msg) => {
+        setCustomAlert(msg);
+      };
+
+      const statsSummary = useMemo(() => {
+        const total = stats.total;
+        const countYa = stats.data.q9 ? (stats.data.q9['Ya'] || 0) : 0;
+        const countKarakter = stats.data.q7 ? (stats.data.q7['Pembentukan karakter'] || 0) : 0;
+        const countIman = stats.data.q7 ? (stats.data.q7['Kedewasaan iman'] || 0) : 0;
+        const countJelas = stats.data.q2 ? (stats.data.q2['Sangat Jelas dan Mudah Dipahami'] || 0) : 0;
+
+        return {
+          rekomendasiPercent: total > 0 ? `${((countYa / total) * 100).toFixed(0)}%` : '0%',
+          karakterDanImanCount: countKarakter + countIman,
+          akurasiPpdbPercent: total > 0 ? `${((countJelas / total) * 100).toFixed(0)}%` : '0%',
+          pembentukanKarakterOnly: countKarakter
+        };
+      }, [stats]);
+
+      const controlManagementTable = useMemo(() => {
+        const totalRes = stats.total;
+        const q2Kurang = stats.data.q2 ? (stats.data.q2['Kurang Jelas'] || 0) : 0;
+        const q2KurangPct = totalRes > 0 ? ((q2Kurang / totalRes) * 100).toFixed(0) : 0;
+        
+        const q5Rumit = stats.data.q5 ? (stats.data.q5['Rumit dan kurang transparan'] || 0) : 0;
+        const q5RumitPct = totalRes > 0 ? ((q5Rumit / totalRes) * 100).toFixed(0) : 0;
+
+        return [
+          {
+            id: 1,
+            aspect: "Kejelasan Alur & Informasi SPMB",
+            dataSupport: `${q2KurangPct}% responden menganggap alur 'Kurang Jelas' (Disertai keluhan server lambat).`,
+            rootCause: "Sistem server SPMB terpusat mengalami beban tinggi di jam pendaftaran awal.",
+            actions: "1. Upgrade bandwidth server hosting.\n2. Buat video infografis alur panduan.\n3. Siapkan helpdesk WhatsApp interaktif 24 jam.",
+            pic: "Koordinator IT & Humas",
+            deadline: "Juli 2026",
+            status: "Sedang Berjalan"
+          },
+          {
+            id: 2,
+            aspect: "Administrasi & Transparansi Keuangan",
+            dataSupport: `${q5RumitPct}% menilai 'Rumit/Kurang Transparan'.`,
+            rootCause: "Rincian biaya paket pendukung belum siap saat pengumuman pendaftaran.",
+            actions: "1. Integrasi sistem tagihan satu pintu.\n2. Pengiriman PDF rincian ukuran & biaya seragam otomatis via WA.",
+            pic: "Bendahara & Admin SPMB",
+            deadline: "Agustus 2026",
+            status: "Direncanakan"
+          },
+          {
+            id: 3,
+            aspect: "Fasilitas Fisik & Lingkungan (Kantin & Sanitasi)",
+            dataSupport: "Terdapat masukan meminta pengawasan higienitas kantin.",
+            rootCause: "Meningkatnya jumlah siswa baru meningkatkan frekuensi penggunaan kantin.",
+            actions: "1. Pengadaan tempat sampah terpilah baru di lorong.\n2. Evaluasi bulanan kebersihan mitra kantin.",
+            pic: "Sarana Prasarana",
+            deadline: "September 2026",
+            status: "Selesai"
+          }
+        ];
+      }, [stats]);
+
+      return (
+        <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
+          
+          {/* ================= BAGIAN WEB UTAMA ================= */}
+          <div className={`${isOnScreenPrintPreview ? 'hidden' : 'print:hidden'} flex flex-col flex-1`}>
+            
+            {/* HEADER UTAMA */}
+            <header className="bg-gradient-to-r from-blue-900 to-indigo-950 text-white shadow-xl sticky top-0 z-50">
+              <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+                
+                {/* Logo & Judul */}
+                <div className="flex items-center gap-3">
+                  <div className="bg-white p-1.5 rounded-xl shadow-lg border border-amber-400 flex items-center justify-center w-14 h-14 flex-shrink-0 overflow-hidden">
+                    {!logoHasError ? (
+                      <img 
+                        src="logo yxp6_2.jpg" 
+                        alt="Logo" 
+                        className="h-full w-full object-contain" 
+                        onError={() => setLogoHasError(true)}
+                      />
+                    ) : (
+                      <svg viewBox="0 0 100 110" className="w-full h-full text-blue-900" fill="currentColor">
+                        <polygon points="50,5 92,36 77,93 23,93 8,36" fill="#1e3a8a" stroke="#fbbf24" strokeWidth="4"/>
+                        <path d="M22,46 Q40,32 50,18 Q60,32 78,46 Q50,62 22,46" fill="#fbbf24" />
+                        <path d="M32,68 Q50,63 50,76 Q50,63 68,68 L68,52 Q50,47 50,60 Q50,47 32,52 Z" fill="#ffffff" stroke="#1e3a8a" strokeWidth="2.5" />
+                        <rect x="47" y="28" width="6" height="26" fill="#ffffff" />
+                        <rect x="37" y="35" width="26" height="6" fill="#ffffff" />
+                      </svg>
+                    )}
+                  </div>
+                  <div>
+                    <h1 className="text-lg md:text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-amber-300 bg-clip-text text-transparent">
+                      SD XAVERIUS 2 JAMBI
+                    </h1>
+                    <p className="text-[10px] text-amber-400 font-semibold tracking-widest uppercase">
+                      YAYASAN XAVERIUS PALEMBANG
+                    </p>
+                  </div>
+                </div>
+
+                {/* Navigasi Tab */}
+                <div className="flex bg-blue-950/60 p-1.5 rounded-xl border border-blue-800/80 items-center gap-1">
+                  <button
+                    onClick={() => setActiveTab('survey')}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300 flex items-center gap-1.5 ${
+                      activeTab === 'survey'
+                        ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md'
+                        : 'text-slate-300 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    Formulir Survei
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('admin')}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300 flex items-center gap-1.5 ${
+                      activeTab === 'admin'
+                        ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md'
+                        : 'text-slate-300 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    Dashboard Admin
+                  </button>
+                </div>
+
+              </div>
+            </header>
+
+            {/* BANNER UTAMA */}
+            <section className="bg-gradient-to-b from-blue-950 to-blue-900 text-white py-12 px-4 text-center relative overflow-hidden">
+              <div className="max-w-4xl mx-auto relative z-10">
+                <h2 className="text-2xl md:text-4xl font-extrabold tracking-tight">
+                  Survei Kepuasan & Harapan Orang Tua/Wali Murid Baru
+                </h2>
+                <p className="text-amber-400 text-lg md:text-xl font-bold mt-2 uppercase">
+                  Tahun Ajaran 2026/2027
+                </p>
+              </div>
+            </section>
+
+            {/* KONTEN UTAMA */}
+            <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-8">
+              
+              {/* TAB 1: SURVEY */}
+              {activeTab === 'survey' && (
+                <div className="max-w-2xl mx-auto">
+                  
+                  {!currentParent ? (
+                    <div className="bg-white rounded-3xl shadow-xl border p-8">
+                      <div className="text-center mb-6">
+                        <h3 className="text-2xl font-bold text-slate-900">Verifikasi Wali Murid Baru</h3>
+                        <p className="text-slate-500 text-xs mt-2">
+                          Silakan masukkan kode autentikasi Anda di bawah ini untuk mulai mengisi kuesioner.
+                        </p>
+                      </div>
+
+                      <form onSubmit={handleParentLogin} className="space-y-4">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 uppercase mb-1.5">Nomor Verifikasi</label>
+                          <input
+                            type="text"
+                            placeholder="Ketik kode registrasi Anda..."
+                            value={loginRegNo}
+                            onChange={(e) => setLoginRegNo(e.target.value)}
+                            required
+                            className="w-full px-4 py-3 border-2 rounded-xl focus:border-blue-900 focus:outline-none"
+                          />
+                          <p className="text-xs text-blue-800 bg-blue-50 p-3 rounded-lg mt-2 font-medium">
+                            ℹ️ Nomor Verifikasi hanya untuk masuk, yang nantinya kode ini yang akan dibagikan di grup WhatsApp murid baru.
+                          </p>
+                        </div>
+
+                        {loginError && <div className="p-3 bg-red-50 text-red-700 text-xs font-bold rounded-lg">{loginError}</div>}
+
+                        {/* Petunjuk Demo Jika Kosong */}
+                        {eligibleParents.length === 0 ? (
+                          <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 text-center">
+                            <p className="text-xs text-amber-800 font-bold">⚠️ Database Calon Siswa Kosong</p>
+                            <p className="text-[10px] text-amber-900 mt-1 leading-relaxed">
+                              Sistem di hosting belum memiliki data pendaftar. Masuk ke <strong>Dashboard Admin (PIN: {adminPin})</strong>, lalu ke menu <strong>Database SPMB</strong> untuk mengisi data siswa terlebih dahulu.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-xs text-amber-900">
+                            <strong>💡 Kode Simulasi Aktif untuk Demo:</strong>
+                            <ul className="list-disc list-inside mt-1 font-mono font-bold">
+                              {eligibleParents.slice(0, 3).map((p, idx) => (
+                                <li key={idx}>{p.regNo} ({p.kelas})</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        <button type="submit" className="w-full bg-blue-900 hover:bg-indigo-950 text-white font-bold py-3.5 rounded-xl transition-all">
+                          Masuk ke Kuesioner
+                        </button>
+                      </form>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      
+                      {/* Bar Informasi Akun */}
+                      <div className="bg-blue-900 text-white p-4 rounded-2xl shadow-md flex items-center justify-between">
+                        <div>
+                          <p className="text-xs text-blue-200">Peserta SPMB Terverifikasi:</p>
+                          <h4 className="text-sm font-bold">{currentParent.kelas} ({currentParent.regNo})</h4>
+                        </div>
+                        <button onClick={handleParentLogout} className="text-xs text-amber-300 font-bold bg-white/10 px-3 py-1.5 rounded-lg">
+                          Keluar
+                        </button>
+                      </div>
+
+                      {!surveySubmitted ? (
+                        <div className="bg-white rounded-3xl shadow-xl border overflow-hidden">
+                          
+                          {/* Progress bar */}
+                          <div className="bg-slate-50 p-6 border-b">
+                            <div className="flex justify-between text-xs font-bold text-slate-500 mb-2">
+                              <span>Kemajuan Pengisian</span>
+                              <span>{currentStep} / {totalSteps}</span>
+                            </div>
+                            <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                              <div className="bg-blue-900 h-full transition-all" style={{ width: `${(currentStep / totalSteps) * 100}%` }} />
+                            </div>
+                          </div>
+
+                          {/* Detail Pertanyaan */}
+                          <div className="p-8">
+                            {questions.map((q) => {
+                              if (q.id !== currentStep) return null;
+                              return (
+                                <div key={q.id} className="animate-fade-in">
+                                  <h3 className="text-lg md:text-xl font-bold mb-6 text-slate-900">{q.id}. {q.title}</h3>
+                                  
+                                  {q.type === 'radio' && q.options && (
+                                    <div className="space-y-3">
+                                      {q.options.map((opt, idx) => (
+                                        <label key={idx} className="flex items-center gap-3 p-4 border rounded-xl cursor-pointer hover:bg-slate-50">
+                                          <input
+                                            type="radio"
+                                            name={q.key}
+                                            checked={formData[q.key] === opt}
+                                            onChange={() => handleRadioChange(q.key, opt)}
+                                            className="h-4 w-4"
+                                          />
+                                          <span className="text-sm font-medium">{opt}</span>
+                                        </label>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {q.type === 'checkbox' && q.options && (
+                                    <div className="space-y-3">
+                                      <p className="text-xs text-amber-600 mb-2 font-semibold">Maksimal pilih {q.maxOptions || 2} pilihan.</p>
+                                      {q.options.map((opt, idx) => (
+                                        <label key={idx} className="flex items-center gap-3 p-4 border rounded-xl cursor-pointer hover:bg-slate-50">
+                                          <input
+                                            type="checkbox"
+                                            checked={(formData[q.key] || []).includes(opt)}
+                                            onChange={() => handleCheckboxChange(q.key, opt, q.maxOptions || 2)}
+                                            className="h-4 w-4"
+                                          />
+                                          <span className="text-sm font-medium">{opt}</span>
+                                        </label>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {q.type === 'textarea' && (
+                                    <textarea
+                                      rows={5}
+                                      value={formData[q.key] || ''}
+                                      onChange={(e) => handleTextChange(q.key, e.target.value)}
+                                      placeholder="Ketik kritik atau saran konstruktif Anda di sini..."
+                                      className="w-full p-4 border-2 rounded-xl focus:border-blue-900 focus:outline-none"
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })}
+
+                            {validationError && <div className="mt-4 p-3 bg-red-50 text-red-700 text-xs font-bold rounded-lg">{validationError}</div>}
+                          </div>
+
+                          {/* Navigasi Wizard */}
+                          <div className="bg-slate-50 p-6 border-t flex justify-between">
+                            <button onClick={handlePrev} disabled={currentStep === 1} className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-lg">
+                              Kembali
+                            </button>
+
+                            {currentStep < totalSteps ? (
+                              <button onClick={handleNext} className="bg-blue-900 text-white px-6 py-2 rounded-lg font-bold">
+                                Selanjutnya
+                              </button>
+                            ) : (
+                              <button onClick={handleSubmitSurvey} className="bg-amber-500 text-slate-950 px-6 py-2 rounded-lg font-black">
+                                Kirim Survei
+                              </button>
+                            )}
+                          </div>
+
+                        </div>
+                      ) : (
+                        <div className="bg-white p-8 rounded-3xl border text-center space-y-4">
+                          <h3 className="text-2xl font-bold text-emerald-700">Tanggapan Terkirim!</h3>
+                          <p className="text-slate-600 text-sm">Terima kasih atas bantuan dan evaluasi berharga yang Bapak/Ibu berikan.</p>
+                          <button onClick={handleParentLogout} className="bg-blue-900 text-white px-6 py-2 rounded-lg font-bold">
+                            Selesai & Keluar
+                          </button>
+                        </div>
+                      )}
+
+                    </div>
+                  )}
+
+                </div>
+              )}
+
+              {/* TAB 2: ADMIN */}
+              {activeTab === 'admin' && (
+                <div className="space-y-6">
+                  
+                  {!isAdminUnlocked ? (
+                    <div className="max-w-md mx-auto bg-white p-8 rounded-3xl border">
+                      <h3 className="text-xl font-bold text-center mb-4">Akses Keamanan Admin</h3>
+                      <form onSubmit={handleAdminAccess} className="space-y-4">
+                        <input
+                          type="password"
+                          placeholder="Ketik PIN Admin..."
+                          value={passcode}
+                          onChange={(e) => setPasscode(e.target.value)}
+                          className="w-full text-center text-2xl py-2 border-2 rounded-xl"
+                        />
+                        {passcodeError && <div className="text-red-600 text-xs text-center font-bold">{passcodeError}</div>}
+                        <button type="submit" className="w-full bg-blue-900 text-white py-3 rounded-xl font-bold">
+                          Buka Dashboard
+                        </button>
+                      </form>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      
+                      {/* Menu Panel */}
+                      <div className="bg-white p-4 rounded-xl border flex flex-wrap justify-between items-center gap-4">
+                        <div className="flex gap-2">
+                          <button onClick={() => setAdminSubTab('statistics')} className={`px-4 py-1.5 rounded-lg text-xs font-bold ${adminSubTab === 'statistics' ? 'bg-blue-900 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                            Statistik
+                          </button>
+                          <button onClick={() => setAdminSubTab('control_management')} className={`px-4 py-1.5 rounded-lg text-xs font-bold ${adminSubTab === 'control_management' ? 'bg-blue-900 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                            Matriks Perbaikan
+                          </button>
+                          <button onClick={() => setAdminSubTab('raw_comments')} className={`px-4 py-1.5 rounded-lg text-xs font-bold ${adminSubTab === 'raw_comments' ? 'bg-blue-900 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                            Katalog Aspirasi
+                          </button>
+                          <button onClick={() => setAdminSubTab('manage_questions')} className={`px-4 py-1.5 rounded-lg text-xs font-bold ${adminSubTab === 'manage_questions' ? 'bg-blue-900 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                            Kelola Pertanyaan
+                          </button>
+                          <button onClick={() => setAdminSubTab('manage_parents')} className={`px-4 py-1.5 rounded-lg text-xs font-bold ${adminSubTab === 'manage_parents' ? 'bg-blue-900 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                            Database SPMB
+                          </button>
+                        </div>
+                        <button onClick={handleLogoutAdmin} className="text-xs text-red-600 font-bold">
+                          Kunci Dashboard
+                        </button>
+                      </div>
+
+                      {/* STATISTIK */}
+                      {adminSubTab === 'statistics' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {questions.filter(q => q.type !== 'textarea').map((q) => {
+                            const chartData = stats.data[q.key] || {};
+                            const maxVote = Math.max(...Object.values(chartData), 1);
+                            return (
+                              <div key={q.id} className="bg-white p-6 rounded-xl border">
+                                <h4 className="text-sm font-bold mb-4">{q.id}. {q.title}</h4>
+                                <div className="space-y-3">
+                                  {q.options && q.options.map((opt, idx) => {
+                                    const votes = chartData[opt] || 0;
+                                    const percentage = stats.total > 0 ? (votes / stats.total) * 100 : 0;
+                                    return (
+                                      <div key={idx} className="space-y-1">
+                                        <div className="flex justify-between text-xs font-semibold">
+                                          <span>{opt}</span>
+                                          <span>{votes} ({percentage.toFixed(0)}%)</span>
+                                        </div>
+                                        <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                                          <div className="bg-blue-900 h-full" style={{ width: `${(votes/maxVote)*100}%` }} />
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* KONTROL PERBAIKAN */}
+                      {adminSubTab === 'control_management' && (
+                        <div className="space-y-6">
+                          <div className="bg-gradient-to-r from-blue-900 to-indigo-950 text-white p-6 rounded-xl flex flex-wrap justify-between items-center gap-4">
+                            <div>
+                              <h4 className="font-bold text-lg">Matriks & Rencana Tindak Lanjut</h4>
+                              <p className="text-xs text-slate-300 mt-1">Gunakan tombol berikut untuk pratinjau dokumen rilis fisik A4 sekolah.</p>
+                            </div>
+                            <div className="flex gap-2">
+                              <button onClick={() => setIsOnScreenPrintPreview(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-bold">
+                                👁️ Pratinjau Lembar A4
+                              </button>
+                              <button onClick={() => setShowConfirmDelete(true)} className="bg-red-600 text-white px-4 py-2 rounded-lg text-xs font-bold">
+                                Kosongkan Database
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="bg-white rounded-xl border overflow-hidden">
+                            <table className="w-full text-left border-collapse text-xs">
+                              <thead>
+                                <tr className="bg-slate-50 border-b">
+                                  <th className="p-3">Aspek</th>
+                                  <th className="p-3">Data Pendukung</th>
+                                  <th className="p-3">Tindakan Perbaikan</th>
+                                  <th className="p-3">PIC</th>
+                                  <th className="p-3 text-center">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {controlManagementTable.map(row => (
+                                  <tr key={row.id} className="border-b">
+                                    <td className="p-3 font-bold">{row.aspect}</td>
+                                    <td className="p-3 text-slate-600">{row.dataSupport}</td>
+                                    <td className="p-3 whitespace-pre-line bg-amber-50/10">{row.actions}</td>
+                                    <td className="p-3 font-semibold">{row.pic}</td>
+                                    <td className="p-3 text-center">
+                                      <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold">{row.status}</span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* KATALOG ASPIRASI */}
+                      {adminSubTab === 'raw_comments' && (
+                        <div className="bg-white rounded-xl border divide-y">
+                          {responses.filter(r => r.q10 && r.q10.trim() !== '').length === 0 ? (
+                            <div className="p-8 text-center text-slate-400 font-bold">Belum ada saran masuk.</div>
+                          ) : (
+                            responses.map((r, idx) => (
+                              <div key={idx} className="p-4 hover:bg-slate-50/50">
+                                <p className="text-xs font-bold text-slate-500 mb-1">{r.kelas} ({r.regNo})</p>
+                                <p className="text-sm italic font-medium text-slate-800">"{r.q10}"</p>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+
+                      {/* KELOLA PERTANYAAN */}
+                      {adminSubTab === 'manage_questions' && (
+                        <div className="space-y-6">
+                          <div className="bg-white p-6 rounded-xl border space-y-4">
+                            <h4 className="font-bold text-slate-900">Tambah Pertanyaan Baru</h4>
+                            <div className="space-y-3">
+                              <input
+                                type="text"
+                                placeholder="Tulis judul pertanyaan..."
+                                value={newQuestionTitle}
+                                onChange={(e) => setNewQuestionTitle(e.target.value)}
+                                className="w-full p-2 border rounded-lg text-sm"
+                              />
+                              <div className="flex gap-4">
+                                <select value={newQuestionType} onChange={(e) => setNewQuestionType(e.target.value)} className="p-2 border rounded-lg text-sm">
+                                  <option value="radio">Pilihan Ganda</option>
+                                  <option value="checkbox">Kotak Centang</option>
+                                  <option value="textarea">Esai/Paragraf</option>
+                                </select>
+                                <button onClick={handleAddNewQuestion} className="bg-blue-900 text-white px-4 py-2 rounded-lg text-sm font-bold">
+                                  Simpan Pertanyaan
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="bg-white rounded-xl border divide-y">
+                            {questions.map((q) => (
+                              <div key={q.id} className="p-4 flex justify-between items-start gap-4">
+                                <div>
+                                  <span className="text-[10px] bg-slate-100 p-1 rounded font-bold">#{q.id} ({q.type})</span>
+                                  <h5 className="font-bold text-sm mt-1.5">{q.title}</h5>
+                                </div>
+                                <button onClick={() => startEditingQuestion(q)} className="text-xs text-blue-900 font-bold bg-blue-50 px-3 py-1 rounded">
+                                  Ubah
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* DATABASE SPMB */}
+                      {adminSubTab === 'manage_parents' && (
+                        <div className="space-y-6">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            
+                            {/* Input Manual */}
+                            <div className="bg-white p-5 rounded-xl border space-y-3">
+                              <h5 className="font-bold text-sm">Akses Manual</h5>
+                              <input type="text" placeholder="No Reg: SPMB-2026-001" value={newRegNo} onChange={(e) => setNewRegNo(e.target.value)} className="w-full p-2 border rounded-lg text-xs" />
+                              <input type="text" placeholder="Kelas: Kelas 1A" value={newKelas} onChange={(e) => setNewKelas(e.target.value)} className="w-full p-2 border rounded-lg text-xs" />
+                              <button onClick={handleAddEligibleParent} className="w-full bg-blue-900 text-white py-2 rounded-lg text-xs font-bold">Tambah Akses</button>
+                            </div>
+
+                            {/* Impor Massal */}
+                            <div className="bg-white p-5 rounded-xl border space-y-3">
+                              <h5 className="font-bold text-sm">Impor Massal (Excel)</h5>
+                              <button onClick={downloadExcelTemplate} className="w-full bg-slate-100 hover:bg-slate-200 py-1.5 rounded-lg text-[10px] font-bold border">
+                                📥 Unduh Template Excel
+                              </button>
+                              <textarea rows={2} placeholder="Tempel kolom Excel di sini..." value={importTextArea} onChange={(e) => setImportTextArea(e.target.value)} className="w-full p-2 border text-[10px]" />
+                              <button onClick={() => handleImportData(importTextArea)} className="w-full bg-emerald-600 text-white py-1.5 rounded-lg text-xs font-bold">Impor Tempel</button>
+                            </div>
+
+                            {/* Setelan PIN */}
+                            <div className="bg-white p-5 rounded-xl border space-y-3">
+                              <h5 className="font-bold text-sm">Setelan Sandi PIN</h5>
+                              <input type="text" placeholder="PIN Baru..." value={newPinInput} onChange={(e) => setNewPinInput(e.target.value)} className="w-full p-2 border rounded-lg text-xs" />
+                              <button onClick={handleUpdatePin} className="w-full bg-amber-500 text-slate-950 py-2 rounded-lg text-xs font-bold">Ubah PIN</button>
+                            </div>
+
+                          </div>
+
+                          {/* Tabel Database */}
+                          <div className="bg-white rounded-xl border overflow-hidden">
+                            <div className="p-4 bg-slate-50 border-b flex justify-between items-center text-xs">
+                              <span className="font-bold">Daftar Hak Akses Terdaftar</span>
+                              <span className="font-bold text-blue-900">Total: {eligibleParents.length} Siswa</span>
+                            </div>
+                            <table className="w-full text-left text-xs">
+                              <thead>
+                                <tr className="bg-slate-100 border-b">
+                                  <th className="p-3">No</th>
+                                  <th className="p-3">No Registrasi</th>
+                                  <th className="p-3">Kelas</th>
+                                  <th className="p-3">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {eligibleParents.map((p, idx) => (
+                                  <tr key={idx} className="border-b">
+                                    <td className="p-3 text-slate-500 font-bold">{idx + 1}</td>
+                                    <td className="p-3 font-mono font-bold">{p.regNo}</td>
+                                    <td className="p-3">{p.kelas}</td>
+                                    <td className="p-3">
+                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${p.status === 'Sudah Mengisi' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>{p.status}</span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                    </div>
+                  )}
+
+                </div>
+              )}
+
+            </main>
+
+          </div>
+
+          {/* ================= LAYOUT PRATINJAU DOKUMEN CETAK A4 ================= */}
+          <div className={`${isOnScreenPrintPreview ? 'block bg-slate-700/90 py-8 min-h-screen overflow-y-auto' : 'hidden print:block'}`}>
+            
+            {isOnScreenPrintPreview && (
+              <div className="max-w-[210mm] mx-auto mb-6 bg-slate-900 text-white p-4 rounded-xl flex justify-between items-center font-sans print:hidden">
+                <div>
+                  <h4 className="font-bold text-sm">Pratinjau Lembaran Cetak A4</h4>
+                  <p className="text-[10px] text-slate-400">Mensimulasikan dokumen PDF fisik saat dicetak di kertas A4.</p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => window.print()} className="bg-amber-500 text-slate-950 px-4 py-2 rounded-lg text-xs font-black">Cetak Dokumen</button>
+                  <button onClick={() => setIsOnScreenPrintPreview(false)} className="bg-slate-700 text-white px-4 py-2 rounded-lg text-xs font-bold">Tutup</button>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-white text-slate-900 font-serif mx-auto p-12 max-w-[210mm] min-h-[297mm]">
+              
+              {/* KOP RESMI */}
+              <div className="border-b-4 border-double border-slate-900 pb-4 mb-6 flex items-center justify-between">
+                <div className="w-16 h-16 flex-shrink-0">
+                  <svg viewBox="0 0 100 110" className="w-full h-full text-blue-900" fill="currentColor">
+                    <polygon points="50,5 92,36 77,93 23,93 8,36" fill="#1e3a8a" stroke="#fbbf24" strokeWidth="4"/>
+                    <path d="M22,46 Q40,32 50,18 Q60,32 78,46 Q50,62 22,46" fill="#fbbf24" />
+                    <path d="M32,68 Q50,63 50,76 L68,52 Z" fill="#ffffff" />
+                  </svg>
+                </div>
+                <div className="flex-1 text-center font-serif">
+                  <h2 className="text-md font-bold uppercase">Yayasan Xaverius Palembang</h2>
+                  <h1 className="text-lg font-black text-blue-900 uppercase">SD XAVERIUS 2 JAMBI</h1>
+                  <p className="text-[9px] text-slate-600 mt-1">Jl. Sultan Agung No. 34, Kota Jambi | Telp: (0741) 22002</p>
+                </div>
+                <div className="w-16"></div>
+              </div>
+
+              {/* JUDUL */}
+              <div className="text-center mb-6 font-sans">
+                <h3 className="font-bold text-sm uppercase">Laporan Evaluasi Survei Kepuasan & Harapan Wali Murid Baru</h3>
+                <p className="text-xs font-bold uppercase text-amber-600">Tahun Ajaran 2026/2027</p>
+              </div>
+
+              {/* METADATA */}
+              <div className="bg-slate-50 border p-4 rounded-xl mb-6 grid grid-cols-2 gap-3 text-[11px] font-sans">
+                <div>
+                  <p className="text-slate-500 font-semibold">Dibuat Oleh:</p>
+                  <p className="text-slate-900 font-bold">Tim Penjamin Mutu Internal Sekolah</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 font-semibold">Total Responden:</p>
+                  <p className="text-slate-900 font-bold">{stats.total} Orang</p>
+                </div>
+              </div>
+
+              {/* TABEL KONTROL */}
+              <div className="space-y-4 font-sans text-xs">
+                <h4 className="font-bold text-blue-900 border-b pb-1">MATRIKS KONTROL KEPUTUSAN STRATEGIS</h4>
+                <table className="w-full text-left border-collapse border border-slate-300 text-[10px]">
+                  <thead>
+                    <tr className="bg-slate-100">
+                      <th className="p-2 border border-slate-300">Aspek / Isu</th>
+                      <th className="p-2 border border-slate-300">Akar Masalah</th>
+                      <th className="p-2 border border-slate-300">Tindakan Perbaikan</th>
+                      <th className="p-2 border border-slate-300">PIC</th>
+                      <th className="p-2 border border-slate-300 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {controlManagementTable.map(row => (
+                      <tr key={row.id}>
+                        <td className="p-2 border border-slate-300 font-bold">{row.aspect}</td>
+                        <td className="p-2 border border-slate-300">{row.rootCause}</td>
+                        <td className="p-2 border border-slate-300 bg-amber-50/10">{row.actions}</td>
+                        <td className="p-2 border border-slate-300 font-semibold">{row.pic}</td>
+                        <td className="p-2 border border-slate-300 text-center uppercase font-bold">{row.status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* TANDA TANGAN */}
+              <div className="mt-12 grid grid-cols-2 text-center text-xs font-sans">
+                <div>
+                  <p>Mengesahkan,</p>
+                  <p className="font-bold mt-16">Principal SD Xaverius 2</p>
+                </div>
+                <div>
+                  <p>Jambi, 7 Juni 2026</p>
+                  <p className="font-bold mt-16">Koordinator Mutu</p>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          {/* CUSTOM ALERT MODAL */}
+          {customAlert && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+              <div className="bg-white p-6 rounded-2xl max-w-sm w-full text-center space-y-4 shadow-2xl">
+                <p className="text-sm font-bold text-slate-800">{customAlert}</p>
+                <button onClick={() => setCustomAlert(null)} className="bg-blue-900 text-white font-bold text-xs py-2 px-6 rounded-xl">OK</button>
+              </div>
+            </div>
+          )}
+
+          {/* CONFIRM DELETE MODAL */}
+          {showConfirmDelete && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+              <div className="bg-white p-6 rounded-2xl max-w-sm w-full text-center space-y-4 shadow-2xl">
+                <h4 className="font-bold text-red-600">Konfirmasi Hapus</h4>
+                <p className="text-xs text-slate-600">Apakah Anda yakin ingin menghapus semua tanggapan? Statistik akan di-reset ke nol.</p>
+                <div className="flex gap-2 justify-center">
+                  <button onClick={() => {
+                    setResponses([]);
+                    setEligibleParents(prev => prev.map(p => ({ ...p, status: 'Belum Mengisi' })));
+                    setShowConfirmDelete(false);
+                    showCustomAlert("Seluruh database tanggapan berhasil dikosongkan.");
+                  }} className="bg-red-600 text-white text-xs font-bold px-4 py-2 rounded-lg">Ya, Hapus</button>
+                  <button onClick={() => setShowConfirmDelete(false)} className="bg-slate-200 text-slate-800 text-xs font-bold px-4 py-2 rounded-lg">Batal</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
